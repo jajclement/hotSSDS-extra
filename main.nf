@@ -25,7 +25,7 @@ Pipeline overview:
 // PROCESS 7    : COMPUTEMATRIXFR (DEEPTOOLS)
 // PROCESS 8    : PLOTHEATMAPFR (DEEPTOOLS)
 // PROCESS 9    : ANNOTATEPEAKS (HOMER)
-
+// PROCESS 10    : PLOT_INTERSECT (INTERVENE)
 
 */
 
@@ -38,15 +38,45 @@ def helpMessage() {
 =============================================================================
     Usage:
 
-            nextflow run main.f -c conf/igh.config [options]
+            nextflow run main.f -c conf/igh.config -params-file conf/mm10.config -profile conda [options]
 
-    Tested with Nextflow v20.04.1
+   Tested with Nextflow v20.07.1
 =============================================================================
 Input data parameters:
-    --inputcsv                  FILE    PATH TO INPUT CSV FILE (template and default : /work/${USER}/ssdsnextflowpipeline/tests/fastq/input.csv)
-    -params_file                FILE    PATH TO PARAMETERS JSON FILE (template and default : /work/${USER}/ssdsnextflowpipeline/conf/mm10.json)
+	-params_file            FILE    PATH TO PARAMETERS JSON FILE (template and default : /work/${USER}/ssdsnextflowpipeline/conf/mm10.json)
+	--name			STRING  ANALYSIS NAME (default : "SSDS_postprocess_pipeline")
+	--sample_name		STRING  SAMPLE OR GROUP NAME (default : " 
+	--publishdir_mode	STRING  MODE FOR EXPORTING PROCESS OUTPUT FILES TO OUTPUT DIRECTORY (default : "copy", must be "symlink", "rellink", "link", "copy", "copyNoFollow","move", see https://www.nextflow.io/docs/latest/process.html)
+    	--genomebase	        DIR     PATH TO REFERENCE GENOMES (default : "/poolzfs/genomes")
+    	--genome		STRING  REFERENCE GENOME NAME (must correspond to an existing genome in your config file, default : "mm10")
+	--finalpeaksbed		FILE	FILTERED PEAKS IN BED FORMAT (for example, coming from ssdsnextflowprocess, in the finalpeaks folder (warning : if finalpeakbed is not None, bamreference cannot be None) ; default : )
+	--peakreference		FILE	REFERENCE PEAKS FILE IN BED FORMAT (set to "None" if none provided (warning : if finalpeakbed is not None, bamreference cannot be None) : set of peaks to compare the finalpeaksbed to (for example, hotspots from B6 WT mouse) ; default : )
+	--bamfolder		DIR	ABSOLUTE PATH TO BAM FOLDER CONTAINING FILTERED TYPE 1 BAM FILES FROM SSDSNEXTFLOWPIPELINE (for example, coming from ssdsnextflowprocess, in the bwa/filterbam/flag_*/parse_itr/type1/bam folder ; default :
+	--bampattern		REGEX	PATTERN FOR MATCHING BAM FILES IN BAMFOLDER (default : "*.bam")
+	--bamreference		DIR     ABSOLUTE PATH TO REFERENCE BAM FOLDER CONTAINING FILTERED TYPE 1 BAM FILES FOR REFERENCE (set to "None" if none provided (warning : if bamreference is not None, peakreference cannot be None) 
+	--bigwigfolder		DIR     ABSOLUTE PATH TO BIGWIG FOLDER CONTAINING BIGWIG FILES FROM SSDSNEXTFLOWPIPELINE (for example, coming from ssdsnextflowprocess, in the bigwig/kbrick_bigwig/deeptools/binsize* folder ; default : 
+	--bigwigpattern		REGEX   PATTERN FOR MATCHING BIGWIG FILES IN BIGWIGFOLDER (default : "*ssDNA_type1.deeptools.RPKM.bigwig")
+	--bedfolder		DIR     ABSOLUTE PATH TO BED FOLDER CONTAINING BED TO COMPUTE INTERSECT (default : 
+	--bedpattern		REGEX   PATTERN FOR MATCHING BED FILES IN BED FOLDER (default : "*.bed")
+	--corMethod		STRING	CORRELATION METHOD FOR DEEPTOOLS PLOTCORRELATION PROCESS (default : spearman; valid options are spearman, pearson)
+	--corPlot		STRING	DEEPTOOLS whatToPlot OPTION FOR PLOTCORRELATION PROCESS (default : heatmap; valid options are heatmap, scatterplot)
+	--heatmap_width		INT	DEEPTOOLS heatmapWidth OPTION FOR PLOTHEATMAP PROCESS (default : 20)
+	--matrix_downstream	INT	DEEPTOOLS downstream OPTION FOR COMPUTEMATRIX PROCESS (default : 2500)
+	--matrix_upstream	INT     DEEPTOOLS upstream OPTION FOR COMPUTEMATRIX PROCESS (default : 2500)
+	--gtf_id		STRING	GTF FEATURE TYPE FOR HOMER (default : "-gid" for gene_id ; valid options are "-gid" and "" for transcript_id which is HOMER default)
+	--figType		STRING	FILE FORMAT FOR THE PLOT (default : pdf ; valid options are pdf,svg,ps,tiff,png)
+	--intersect_options	STRING	INTERVENE --bedtools option (default : "-f 1E-9" ; see bedtools intersect documentation https://bedtools.readthedocs.io/en/latest/)
+	--intersect_threshold	STRING	INTERVENE --intersect_thresh option (default : 1 ; see bedtools intersect documentation https://bedtools.readthedocs.io/en/latest/)
+	--with_clustering	BOOL	If false then clustering step is skipped (default : true)
+	--with_heatmap		BOOL	If false then heatmap step is skipped (default : true)
+	--with_FR_heatmap	BOOL	If false then heatmap for reverse and forwad step is skipped (default : true)
+	--with_FR_bigwig	BOOL	If false then bigwigs for reverse and forwad step is skipped (default : true)
+	--with_peak_annot	BOOL	If false then peak annotation step is skipped (default : true)
+	--with_plot_intersect	BOOL	If false then bed intersection step is skipped (default : true)
 
-=================================================================================================
+=============================================================================
+
+=============================================================================
 """.stripIndent()
 }
 
@@ -68,12 +98,6 @@ if (params.help){
     exit 0
 }
 
-// Define global variables
-// Create scratch directory
-scrdir = file("${params.scratch}")
-result = scrdir.mkdirs()
-println result ? "Create scratch directory...OK" : "Cannot create directory: $scrdir"
-
 // Custom name variables
 def runName = "${params.name}.$workflow.runName"
 
@@ -84,8 +108,11 @@ def plot_homer_annotation_script = "${params.src}/plot_homer_annotatepeaks.r"  /
 if (params.finalpeaksbed) { println("Checking finalpeaksbed input file...") ; f_finalpeaks = file(params.finalpeaksbed, checkIfExists: true) } ; println("Ok")
 if (params.peakreference != "None") { println("Checking peakreference input file...") ; f_peaksref = file(params.peakreference, checkIfExists: true) } ; println("Ok")
 if (params.bamfolder) { println("Checking bamfolder directory...") ; d_bam = file(params.bamfolder, checkIfExists: true) } ; println("Ok")
-if (params.bigwigfolder { println("Checking bigwigfolder  directory...") ; d_bw = file(params.bigwigfolder, checkIfExists: true) } ; println("Ok")
-if (params.reference != "None") { println("Checking bamreference directory...") ; d_bamref = file(params.bamreference, checkIfExists: true) } ; println("Ok")
+if (params.bigwigfolder) { println("Checking bigwigfolder  directory...") ; d_bw = file(params.bigwigfolder, checkIfExists: true) } ; println("Ok")
+if (params.bedfolder) { println("Checking bedfolder  directory...") ; d_bw = file(params.bedfolder, checkIfExists: true) } ; println("Ok")
+if (params.bamreference != "None") { println("Checking bamreference directory...") ; d_bamref = file(params.bamreference, checkIfExists: true) } ; println("Ok")
+if (params.bamreference != "None" && params.peakreference == "None" ) { println("Checking conformity of reference parameters peakreference and bamreference") ; println("Error : bamreference parameter is set but there is no peakreference parameter ; either set bamreference to None or set up a peakreference file") ; exit 1 } ; else println("Ok")
+if (params.bamreference == "None" && params.peakreference != "None" ) { println("Checking conformity of reference parameters peakreference and bamreference") ; println("Error : peakreference parameter is set but there is no bamreference parameter ; either set peakreference to None or set up a bamreference folder") ; exit 1 } ; else println("Ok")
 
 // Check if genome exists in the config file
 if (params.genomes && params.genome && !params.genomes.containsKey(params.genome)) {
@@ -457,7 +484,7 @@ process annotatePeaks {
     # If working with mouse data mapped on mm10 genome
     if [ ${params.genome} == "mm10" ]
     then
-        // download UCSC mm10 annotation files for Homer
+        #download UCSC mm10 annotation files for Homer
         perl \$CONDA_PREFIX/share/homer/.//configureHomer.pl -install mm10
         annotatePeaks.pl ${params.finalpeaksbed} \
                      mm10 \
@@ -477,6 +504,42 @@ process annotatePeaks {
                                     -o ./ \
                                     -p ${params.sample_name}.plothomer \
                                     >& ${params.sample_name}.plothomer.log 2>&1
+    """
+}
+
+// PROCESS 10    : PLOT_INTERSECT (INTERVENE)
+// What it does : Compute overlap of bed sets using intervene
+// Input        : list of bed files
+// Output       : overlapping bed files and upset plot of overlaps
+// Resource     : https://intervene.readthedocs.io/en/latest/modules.html
+process plotIntersect {
+    tag "${params.sample_name}"
+    label 'process_basic'
+    conda 'bioconda::intervene=0.6.4'
+    publishDir "${params.outdir}/intersect/plots",   mode: params.publishdir_mode, pattern: "*.${params.figType}"
+    publishDir "${params.outdir}/intersect/overlap", mode: params.publishdir_mode, pattern: "*.bed"
+    publishDir "${params.outdir}/intersect/log",     mode: params.publishdir_mode, pattern: "*.log"
+    output:
+        path('*.bed')
+        path('*.${params.figType}')
+        path('*.log')
+    when:
+        params.with_plot_intersect
+    script:
+    """
+    #Run intervene to compute the intesecting sets
+    intervene upset -i ${params.bedfolder}/${params.bedpattern} \
+                    --scriptonly --figtype ${params.figType} \
+                    --bedtools-options ${params.intersect_options} \
+                    --overlap-thresh ${params.intersect_threshold} \
+                    --project ${params.sample_name} \
+                    --save-overlaps >& ${params.sample_name}_intervene.log 2>&1
+
+    #There is a bug (need to investigate but no time now) : need to edit the R script generated by intervene before execution otherwise the execution is halted
+    sed -i "s/, mainbar.y.label =\"No. of Intersections\", sets.x.label =\"Set size\")/)/g" ${params.sample_name}_upset.R >& ${params.sample_name}_intervene_sed.log 2>&1
+
+    #Finally, esecute Rscript to plot the upset plot
+    Rscript ${params.sample_name}_upset.R >& ${params.sample_name}_intervene_rscript.log 2>&1
     """
 }
 
