@@ -162,24 +162,24 @@ You first need to sign in to get your key, then add it to your parameters with t
 ### 6. Output
 Tree overview of the output folder composition :
 .
-├── nxfReports
-├── slurm
-├── annotations
-│   ├── plots
-│   └── log
-├── FRbigwig
-│   └── log
-├── multiqc
-│   ├── DMC1-ChIP-test_R1.multiqc.report_plots
-│   └── DMC1-ChIP-test_R1.multiqc.report_data
-├── clustering
-│   ├── plots
-│   ├── log
-│   └── matrices
-└── heatmap
-    ├── plots
-    ├── log
+├── nxfReports   
+├── slurm   
+├── annotations  
+│   ├── plots   
+│   └── log   
+├── FRbigwig   
+│   └── log   
+├── multiqc   
+│   ├── *.multiqc.report_plots   
+│   └── *.multiqc.report_data   
+├── clustering    
+│   ├── plots   
+│   ├── log   
+│   └── matrices   
+└── heatmap   
+    ├── plots   
+    ├── log   
     └── matrices
-
+   
 
 :christmas_tree:
