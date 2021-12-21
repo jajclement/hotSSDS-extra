@@ -1,4 +1,4 @@
-# :tropical_fish: **SSDS post-process pipeline version 1.0** :bar_chart:
+# :chart_with_upwards_trend: **SSDS post-process pipeline version 1.0** :bar_chart:
 **Compute and Plot general statistics for processed Single-Stranded-DNA-Sequencing (SSDS) data**
 
 ## **Context**  
@@ -40,7 +40,7 @@ bash Miniconda3-latest-Linux-x86_64.sh
 First you need to clone the pipeline in your working directory (in the following instructions, ``/home/${USER}/work/`` will refer to your working directory. Please substitute with the according path if different) :
 ````sh
 cd /home/${USER}/work
-git clone https://gitlab.igh.cnrs.fr/pauline.auffret/ssdsnextflowpipeline.git
+git clone https://gitlab.igh.cnrs.fr/pauline.auffret/ssdspostprocess.git
 cd ssdsnextflowpipeline
 ````
 Then install pipeline conda environment through sbatch script : 
@@ -51,3 +51,21 @@ Please use ``bash src/install_pipeline.sh -h`` to see details.
 This will create 1 conda environment : **nextflow_dev** containing **nextflow version 20.04.01**.  
 You can use your own conda environment as long as it contains that version of Nextflow.   
 
+### 2. Pipeline configuration 
+There are currently **3 configuration files** :
+- ````./conf/igh.config```` contains cluster resources requirements & reference genomes info. You don't need to edit this file unless you want to custom the requirements for CPU/memory usage and compute queue (see [IGH cluster documentation](https://kojiki.igh.cnrs.fr/doku.php?id=cluster,)). If a new genome is available on the cluster and does not appear in this file, please contact me or Aubin Thomas, manager of bioinformatics resources at the IGH. If you are running the pipeline on an other computing cluster, you need to specify the relevant configuration file.
+- ````./nextflow.config```` contains default pipeline parameters (it's better to **not** edit this file, default parameters will be overwritten by your custom json parameter file, see next point).
+- ````./conf/mm10.json```` custom parameters file, you can use your own json file following the same template.    
+    
+The complete list of parameters is accessible through the command :
+````
+cd /home/${USER}/work/ssdsnextflowpipeline
+conda activate nextflow_dev
+nextflow run main.nf --help
+````
+````
+
+
+
+
+One **important thing to note**, in Nextflow command lines, the **native options** are preceded with one **single hyphen** (e.g. ``-profile``), while **parameters specific to SSDS pipeline** are preceded with **2 hyphens** (e.g. ``--genome 'mm10'``).   
