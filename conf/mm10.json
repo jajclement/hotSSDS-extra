@@ -25,4 +25,5 @@
 "with_FR_heatmap":false,
 "with_FR_bigwig":false,
 "with_peak_annot":false,
-"with_plot_intersect":true}
+"with_plot_intersect":true,
+"with_report":true}

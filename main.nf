@@ -25,8 +25,8 @@ Pipeline overview:
 // PROCESS 7    : COMPUTEMATRIXFR (DEEPTOOLS)
 // PROCESS 8    : PLOTHEATMAPFR (DEEPTOOLS)
 // PROCESS 9    : ANNOTATEPEAKS (HOMER)
-// PROCESS 10    : PLOT_INTERSECT (INTERVENE)
-
+// PROCESS 10   : PLOT_INTERSECT (INTERVENE)
+// PROCESS 11   : GENERAL REPORT (MULTIQC)
 */
 
 // Construct help message (option --help)
@@ -45,10 +45,7 @@ def helpMessage() {
 Input data parameters:
 	-params_file            FILE    PATH TO PARAMETERS JSON FILE (template and default : /work/${USER}/ssdsnextflowpipeline/conf/mm10.json)
 	--name			STRING  ANALYSIS NAME (default : "SSDS_postprocess_pipeline")
-	--sample_name		STRING  SAMPLE OR GROUP NAME (default : " 
-	--publishdir_mode	STRING  MODE FOR EXPORTING PROCESS OUTPUT FILES TO OUTPUT DIRECTORY (default : "copy", must be "symlink", "rellink", "link", "copy", "copyNoFollow","move", see https://www.nextflow.io/docs/latest/process.html)
-    	--genomebase	        DIR     PATH TO REFERENCE GENOMES (default : "/poolzfs/genomes")
-    	--genome		STRING  REFERENCE GENOME NAME (must correspond to an existing genome in your config file, default : "mm10")
+        --sample_name           STRING  SAMPLE OR GROUP NAME (default : "DMC1-ChIP")       
 	--finalpeaksbed		FILE	FILTERED PEAKS IN BED FORMAT (for example, coming from ssdsnextflowprocess, in the finalpeaks folder (warning : if finalpeakbed is not None, bamreference cannot be None) ; default : )
 	--peakreference		FILE	REFERENCE PEAKS FILE IN BED FORMAT (set to "None" if none provided (warning : if finalpeakbed is not None, bamreference cannot be None) : set of peaks to compare the finalpeaksbed to (for example, hotspots from B6 WT mouse) ; default : )
 	--bamfolder		DIR	ABSOLUTE PATH TO BAM FOLDER CONTAINING FILTERED TYPE 1 BAM FILES FROM SSDSNEXTFLOWPIPELINE (for example, coming from ssdsnextflowprocess, in the bwa/filterbam/flag_*/parse_itr/type1/bam folder ; default :
@@ -58,7 +55,16 @@ Input data parameters:
 	--bigwigpattern		REGEX   PATTERN FOR MATCHING BIGWIG FILES IN BIGWIGFOLDER (default : "*ssDNA_type1.deeptools.RPKM.bigwig")
 	--bedfolder		DIR     ABSOLUTE PATH TO BED FOLDER CONTAINING BED TO COMPUTE INTERSECT (default : 
 	--bedpattern		REGEX   PATTERN FOR MATCHING BED FILES IN BED FOLDER (default : "*.bed")
-	--corMethod		STRING	CORRELATION METHOD FOR DEEPTOOLS PLOTCORRELATION PROCESS (default : spearman; valid options are spearman, pearson)
+
+Genome parameters:	
+        --genomebase            DIR     PATH TO REFERENCE GENOMES (default : "/poolzfs/genomes")
+        --genome                STRING  REFERENCE GENOME NAME (must correspond to an existing genome in your config file, default : "mm10")
+        --genomedir             DIR     PATH TO GENOME DIRECTORY (required if your reference genome is not present in your config file)
+        --genome_fasta          FILE    PATH TO FILE GENOME FASTA FILE WITH PREEXISTING INDEX FILES FOR BWA (required if your reference genome is not present in your config file)
+        --genome_gtf
+
+Tools specific parameters:
+        --corMethod		STRING	CORRELATION METHOD FOR DEEPTOOLS PLOTCORRELATION PROCESS (default : spearman; valid options are spearman, pearson)
 	--corPlot		STRING	DEEPTOOLS whatToPlot OPTION FOR PLOTCORRELATION PROCESS (default : heatmap; valid options are heatmap, scatterplot)
 	--heatmap_width		INT	DEEPTOOLS heatmapWidth OPTION FOR PLOTHEATMAP PROCESS (default : 20)
 	--matrix_downstream	INT	DEEPTOOLS downstream OPTION FOR COMPUTEMATRIX PROCESS (default : 2500)
@@ -67,12 +73,16 @@ Input data parameters:
 	--figType		STRING	FILE FORMAT FOR THE PLOT (default : pdf ; valid options are pdf,svg,ps,tiff,png)
 	--intersect_options	STRING	INTERVENE --bedtools option (default : "-f 1E-9" ; see bedtools intersect documentation https://bedtools.readthedocs.io/en/latest/)
 	--intersect_threshold	STRING	INTERVENE --intersect_thresh option (default : 1 ; see bedtools intersect documentation https://bedtools.readthedocs.io/en/latest/)
+
+Pipeline parameters:
 	--with_clustering	BOOL	If false then clustering step is skipped (default : true)
 	--with_heatmap		BOOL	If false then heatmap step is skipped (default : true)
-	--with_FR_heatmap	BOOL	If false then heatmap for reverse and forwad step is skipped (default : true)
+	--with_FR_heatmap	BOOL	If false then heatmap for reverse and forwad step is skipped (default : true ; cannot be true if --with_FR_bigwig is false))
 	--with_FR_bigwig	BOOL	If false then bigwigs for reverse and forwad step is skipped (default : true)
 	--with_peak_annot	BOOL	If false then peak annotation step is skipped (default : true)
 	--with_plot_intersect	BOOL	If false then bed intersection step is skipped (default : true)
+        --with_report           BOOL    If false then general report with multiqc  step is skipped (default : true)
+        --publishdir_mode       STRING  MODE FOR EXPORTING PROCESS OUTPUT FILES TO OUTPUT DIRECTORY (default : "copy", must be "symlink", "rellink", "link", "copy", "copyNoFollow","move", see https://www.nextflow.io/docs/latest/process.html)
 
 =============================================================================
 
@@ -133,6 +143,49 @@ if(params.publishdir_mode!="copy" && params.publishdir_mode!="symlink" && params
 }
 
 
+// Pipeline parameters information
+def paramsSection() {
+log.info """
+==========================================================================
+   SSDS post-process pipeline version 1.0 : Computes and Plots general
+   statistics for processed Single-Stranded-DNA-Sequencing (SSDS) data
+==========================================================================
+** Main parameters ** 
+Run name                            : ${params.name}
+Sample name                         : ${params.sample_name}   
+Filtered final peaks                : ${params.finalpeaksbed}
+Reference hotspots                  : ${params.peakreference}
+Filtered Type 1 reads               : ${params.bamfolder}/${params.bampattern}
+Reference Type 1 reads              : ${params.bamreference}/${params.bampattern}
+Bigwigs                             : ${params.bigwigfolder}/${params.bigwigpattern}
+Bed files to overlap                : ${params.bedfolder}/${params.bedpattern}
+Genome name                         : ${params.genome}
+PublishDir mode                     : ${params.publishdir_mode}
+
+** Tools parameters **
+Correlation method for clustering   : ${params.corMethod}
+Correlation plot type               : ${params.corPlot}
+Heatmap width                       : ${params.heatmap_width}
+Matrix downstream                   : ${params.matrix_downstream}
+Matrix Upstream                     : ${params.matrix_upstream}
+GTF feature base                    : ${params.gtf_id}
+Figure type                         : ${params.figType}
+Bedtools intersect options          : ${params.intersect_options}
+Bedtools intersect threshold        : ${params.intersect_threshold}
+
+** Pipeline steps **
+Clustering                          : ${params.with_clustering}
+Heatmap                             : ${params.with_heatmap}
+Forward and Reverse  bigwigs        : ${params.with_FR_bigwig}
+Forward and Reverse heatmaps        : ${params.with_FR_heatmap}
+Peak annotation                     : ${params.with_peak_annot}
+Plot intersection                   : ${params.with_plot_intersect}
+HTML report			    : ${params.with_report}    
+""".stripIndent()
+}
+// Print parameters in log report
+paramsSection()
+
 //***************************************************************************//
 //                                                                           //
 //                          BEGINNING PIPELINE                               //
@@ -151,7 +204,8 @@ if(params.publishdir_mode!="copy" && params.publishdir_mode!="symlink" && params
 process multiBamSummary {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    //conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
     publishDir "${params.outdir}/clustering/matrices",   mode: params.publishdir_mode, pattern: "*.npz*"
     publishDir "${params.outdir}/clustering/log",        mode: params.publishdir_mode, pattern: "*.log*"
     output:
@@ -193,7 +247,8 @@ process multiBamSummary {
 process plotCorrelation {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/clustering/plots", mode: params.publishdir_mode, pattern: "*.png*"
     publishDir "${params.outdir}/clustering/log",   mode: params.publishdir_mode, pattern: "*.log*"
     input:
@@ -201,6 +256,7 @@ process plotCorrelation {
     output:
         path('*.png')
         path('*.log')
+        val("ok") into clustering_ok
     when:
         params.with_clustering
     script:
@@ -208,12 +264,12 @@ process plotCorrelation {
     plotCorrelation --corData $finalpeaks_matrix \
                     --corMethod ${params.corMethod} \
                     --whatToPlot ${params.corPlot} \
-                    -o ${params.sample_name}.finalpeaks.plotCorrelation.${params.corMethod}.${params.corPlot}.png \
+                    -o ${params.sample_name}.finalpeaks.plotCorrelation.${params.corMethod}.${params.corPlot}_mqc.png \
                     >& ${params.sample_name}.finalpeaks.plotCorrelation.${params.corMethod}.${params.corPlot}.log 2>&1
     plotPCA --corData $finalpeaks_matrix \
             --plotTitle ${params.sample_name} \
             --transpose \
-            -o ${params.sample_name}.finalpeaks.plotPCA.${params.corMethod}.${params.corPlot}.png \
+            -o ${params.sample_name}.finalpeaks.plotPCA.${params.corMethod}.${params.corPlot}_mqc.png \
             >& ${params.sample_name}.finalpeaks.plotPCA.${params.corMethod}.${params.corPlot}.log 2>&1 
     # If another bed file is given to compare with hotspots
     if [ ${params.peakreference} != "None" ]
@@ -221,17 +277,20 @@ process plotCorrelation {
         plotCorrelation --corData $peakref_matrix \
                         --corMethod ${params.corMethod} \
                         --whatToPlot ${params.corPlot} \
-                        -o ${params.sample_name}.peakref.plotCorrelation.${params.corMethod}.${params.corPlot}.png \
+                        -o ${params.sample_name}.peakref.plotCorrelation.${params.corMethod}.${params.corPlot}_mqc.png \
                         >& ${params.sample_name}.peakref.plotCorrelation.${params.corMethod}.${params.corPlot}.log 2>&1
         plotPCA --corData $peakref_matrix \
                 --plotTitle ${params.sample_name} \
                 --transpose \
-                -o ${params.sample_name}.peakref.plotPCA.${params.corMethod}.${params.corPlot}.png \
+                -o ${params.sample_name}.peakref.plotPCA.${params.corMethod}.${params.corPlot}_mqc.png \
                 >& ${params.sample_name}.peakref.plotPCA.${params.corMethod}.${params.corPlot}.log 2>&1
     fi
     """
 }
 
+//***************************************************************************//
+//                         SECTION 2 : HEATMAPS                              //
+//***************************************************************************//
 // PROCESS 3    : COMPUTEMATRIX (DEEPTOOLS) 
 // What it does : calculates scores per genome regions
 // Input        : bed files containing coordinates of hotspots and filtered type1 BAM files and bigwig files from ssdsnextflowpipeline
@@ -240,7 +299,8 @@ process plotCorrelation {
 process computeMatrix {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/matrices", mode: params.publishdir_mode, pattern: "*.matrix"
     publishDir "${params.outdir}/heatmap/log",      mode: params.publishdir_mode, pattern: "*.log"
     output:
@@ -270,7 +330,8 @@ process computeMatrix {
 process plotHeatmap {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/plots", mode: params.publishdir_mode, pattern: "*.png"
     publishDir "${params.outdir}/heatmap/log",   mode: params.publishdir_mode, pattern: "*.log"
     input:
@@ -278,6 +339,7 @@ process plotHeatmap {
     output:
         path('*.png')
         path('*.log')
+        val("ok") into heatmap_ok
     when:
         params.with_heatmap
     script:
@@ -290,7 +352,7 @@ process plotHeatmap {
                 --heatmapWidth=${params.heatmap_width} \
                 --colorMap coolwarm \
                 --plotTitle ${params.sample_name} \
-                -o ${params.sample_name}_heatmap.png \
+                -o ${params.sample_name}_heatmap_mqc.png \
                 >& ${params.sample_name}_heatmap.log 2>&1
     """
 }                
@@ -311,7 +373,8 @@ Channel
 process getForwardStrand {
     tag "${bam_id}"
     label 'process_basic'
-    conda 'deeptools=3.5.1 bioconda::samtools=1.14'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
     publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
     input:
@@ -353,7 +416,8 @@ process getForwardStrand {
 process getReverseStrand {
     tag "${bam_id}"
     label 'process_basic'
-    conda 'deeptools=3.5.1 bioconda::samtools=1.14'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
     publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
     input:
@@ -361,6 +425,7 @@ process getReverseStrand {
     output:
         tuple val(bam_id), path('*bigwig') into rev_bigwig_ch
         path('*.log')
+        val("ok") into FRbigwig_ok
     when:
         params.with_FR_bigwig
     script:
@@ -402,7 +467,8 @@ rev_bigwig_ch
 process computeMatrixFR {
     tag "${bam_id}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/matrices", mode: params.publishdir_mode, pattern: "*.matrix.FR"
     publishDir "${params.outdir}/heatmap/log",      mode: params.publishdir_mode, pattern: "*.log"
     input:
@@ -411,7 +477,7 @@ process computeMatrixFR {
         tuple val(bam_id), path('*finalpeaks.matrix.FR') into matrix_FR_ch
         path('*.log')
     when:
-        params.with_FR_heatmap
+        params.with_FR_heatmap && params.with_FR_bigwig
     script:
     """
     computeMatrix   reference-point --regionsFileName ${params.finalpeaksbed} \
@@ -434,7 +500,8 @@ process computeMatrixFR {
 process plotHeatmapFR {
     tag "${bam_id}"
     label 'process_basic'
-    conda 'deeptools=3.5.1'
+    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/plots", mode: params.publishdir_mode, pattern: "*.png"
     publishDir "${params.outdir}/heatmap/log",   mode: params.publishdir_mode, pattern: "*.log"
     input:
@@ -442,8 +509,9 @@ process plotHeatmapFR {
     output:
         path('*.png')
         path('*.log')
+        val("ok") into FRheatmap_ok
     when:
-        params.with_FR_heatmap
+        params.with_FR_heatmap && params.with_FR_bigwig
     script:
     """
     plotHeatmap --matrixFile $matrix \
@@ -454,11 +522,13 @@ process plotHeatmapFR {
                 --heatmapWidth=${params.heatmap_width} \
                 --colorMap coolwarm \
                 --plotTitle ${bam_id} \
-                -o ${bam_id}_heatmap.FR.png \
+                -o ${bam_id}_heatmap.FR_mqc.png \
                 >& ${bam_id}_heatmap.FR.log 2>&1
     """
 }                
-
+//***************************************************************************//
+//                         SECTION 3 : PEAK ANNOTATION                       //
+//***************************************************************************//
 // PROCESS 9    : ANNOTATEPEAKS (HOMER AND R)
 // What it does : annotate peaks (hotspots) using Homer
 // Input        : bed file containing peaks
@@ -476,6 +546,7 @@ process annotatePeaks {
         path('*.txt')
         path('*.pdf')
         path('*.log')
+        val("ok") into peakannot_ok
     when:
         params.with_peak_annot
     script:
@@ -493,7 +564,7 @@ process annotatePeaks {
     else
         annotatePeaks.pl ${params.finalpeaksbed} \
                      ${params.genome_fasta} \
-                     -${params.gtf_id} \
+                     ${params.gtf_id} \
                      -gtf ${params.genome_gtf} \
                      1> ${params.sample_name}_annotatePeaks_homer_${params.genome}.txt \
                      2> ${params.sample_name}_annotatePeaks_homer_${params.genome}.log
@@ -506,7 +577,9 @@ process annotatePeaks {
                                     >& ${params.sample_name}.plothomer.log 2>&1
     """
 }
-
+//***************************************************************************//
+//                         SECTION 3 : PEAK COMPARISON                       //
+//***************************************************************************//
 // PROCESS 10    : PLOT_INTERSECT (INTERVENE)
 // What it does : Compute overlap of bed sets using intervene
 // Input        : list of bed files
@@ -515,7 +588,8 @@ process annotatePeaks {
 process plotIntersect {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'bioconda::intervene=0.6.4'
+    //conda 'bioconda::intervene=0.6.4'
+    conda "${params.conda_intervene}"
     publishDir "${params.outdir}/intersect/plots",   mode: params.publishdir_mode, pattern: "*.${params.figType}"
     publishDir "${params.outdir}/intersect/overlap", mode: params.publishdir_mode, pattern: "*.bed"
     publishDir "${params.outdir}/intersect/log",     mode: params.publishdir_mode, pattern: "*.log"
@@ -523,6 +597,7 @@ process plotIntersect {
         path('*.bed')
         path('*.${params.figType}')
         path('*.log')
+        val("ok") into intersect_ok
     when:
         params.with_plot_intersect
     script:
@@ -532,7 +607,7 @@ process plotIntersect {
                     --scriptonly --figtype ${params.figType} \
                     --bedtools-options ${params.intersect_options} \
                     --overlap-thresh ${params.intersect_threshold} \
-                    --project ${params.sample_name} \
+                    --project ${params.sample_name}_mqc 
                     --save-overlaps >& ${params.sample_name}_intervene.log 2>&1
 
     #There is a bug (need to investigate but no time now) : need to edit the R script generated by intervene before execution otherwise the execution is halted
@@ -542,4 +617,61 @@ process plotIntersect {
     Rscript ${params.sample_name}_upset.R >& ${params.sample_name}_intervene_rscript.log 2>&1
     """
 }
+
+//***************************************************************************//
+//                         SECTION 4 : GENERAL REPORT                        //
+//***************************************************************************//
+if (!params.with_clustering) { clustering_ok = Channel.value( 'ok' ) }
+if (!params.with_heatmap) { heatmap_ok = Channel.value( 'ok' ) }
+if (!params.with_FR_heatmap) { FRheatmap_ok = Channel.value( 'ok' ) }
+if (!params.with_FR_bigwig) { FRbigwig_ok = Channel.value( 'ok' ) }
+if (!params.with_peak_annot) { peakannot_ok = Channel.value( 'ok' ) }
+if (!params.with_plot_intersect) { intersect_ok = Channel.value( 'ok' ) }
+
+process generalReport {
+    tag "${params.sample_name}"
+    label 'process_basic'
+    conda "${baseDir}/conda_yml/environment_multiqc.yml"
+    publishDir "${params.outdir}/multiqc",   mode: params.publishdir_mode 
+    input:
+        val('clustering_ok') from clustering_ok.collect().ifEmpty([]) 
+        val('heatmap_ok') from heatmap_ok.collect().ifEmpty([])   
+        val('FRheatmap_ok') from FRheatmap_ok.collect().ifEmpty([])
+        val('FRbigwig_ok') from FRbigwig_ok.collect().ifEmpty([])
+        val('peakannot_ok') from peakannot_ok.collect().ifEmpty([])
+        val('intersect_ok') from intersect_ok.collect().ifEmpty([])
+    output:
+        path('*')
+    when:
+        params.with_report
+    script:
+    """
+    multiqc --export -c ${params.multiqc_configfile} -n ${params.sample_name}.multiqc.report \
+        ${params.outdir}/*
+    """
+} 
+
+//***************************************************************************//
+//                                                                           //
+//                          END OF PIPELINE !!                               //
+//                                                                           //
+//***************************************************************************//
+
+// PRINT LOG MESSAGE ON COMPLETION        
+workflow.onComplete {
+    println "Pipeline completed at: $workflow.complete"
+    println "Pipeline duration: $workflow.duration"
+    println "Execution status: ${ workflow.success ? 'OK' : 'failed' }"
+    println "Command line: $workflow.commandLine"
+    println "Script ID: $workflow.scriptId"
+    println "Run name: $workflow.runName"
+
+}
+workflow.onError {
+    println "Oops... Pipeline execution stopped with the following message: ${workflow.errorMessage}"
+    println "Error report: ${workflow.errorReport}"
+}
+
+
+
 

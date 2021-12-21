@@ -22,13 +22,14 @@ ANALYSIS_NAME="SSDS_postprocess"
 PIPELINE_DIRECTORY="/home/${USER}/work/ssdspostprocess"
 BASE_DIRECTORY="/home/${USER}/work/results"
 CONF="${PIPELINE_DIRECTORY}/conf/igh.config"
-GENOME_PROFILE="${PIPELINE_DIRECTORY}/conf/mm10_test.json"
+GENOME_PROFILE="${PIPELINE_DIRECTORY}/conf/mm10.json"
 CENV="/home/${USER}/work/bin/miniconda3/envs/nextflow_dev"
 now=`date +"%FT%H%M%S"`
 INPUT=""
 OPTIONS=""
 TEST="0"
 FORCE="0"
+TOWER_TOKEN="None"
 
 #Get command line arguments
 while getopts hp:b:n:c:a:o:t:f:g: flag
@@ -43,6 +44,7 @@ do
 		   echo "-c Absolute path to IGH cluster configuration file (default : ${CONF})"; \
 		   echo "-a Absolute path to conda environment for nextflow (default : ${CENV})"; \
 		   echo "-o Optional arguments for the pipeline (for example \"--corMethod spearman --with_heatmap false\" ;  default : \"${OPTIONS}\")"; \
+		   echo "-w Valid Nextflow Tower token (default : ${TOWER_TOKEN} ; if not None, then the option -with-tower has to be added in -o parameter))"; \ 
 		   echo "-t set to 1 if running pipeline on test data located in ${PIPELINE_DIRECTORY}/tests/fastq (default : ${TEST})"; \
 		   echo "-f set to 1 to force pipeline to run without checking resume/output directory (default : ${FORCE})" ; \
 		   echo "INFO : the output directory will be located in the base directory and will be named after the analysis name parameter with the .outdir suffix (default ${BASE_DIRECTORY}/${ANALYSIS_NAME}.outdir)"; \
@@ -54,6 +56,7 @@ do
 		c) CONF=${OPTARG};if [ ! -f ${CONF} ]; then echo "File ${CONF} not found!" ; exit 0; fi;;
 		a) CENV=${OPTARG};if [ ! -d ${CENV} ]; then echo "Environment ${CENV} not found!" ; exit 0; fi;;
 		o) OPTIONS=${OPTARG};;
+		w) TOWER_TOKEN=${OPTARG};;
 		t) TEST=${OPTARG};;
 		f) FORCE=${OPTARG};;
 		\? ) echo "Unknown option: -$OPTARG" >&2; exit 1;;
@@ -111,7 +114,7 @@ else
 	echo "Running SSDS postprocess pipeline from ${PIPELINE_DIRECTORY} on test data within ${CENV##*/} conda environment. Check output directory ${BASE_DIRECTORY}/${ANALYSIS_NAME}.outdir/"
 fi 
 
-Check conda environment.
+#Check conda environment.
 echo "Checking conda environment..."
 if [ ! -d ${CENV} ]; 
 then echo "ABORT : environment ${CENV} not found! Check -a argument. Bye, see you soon !" ; exit 0; 
@@ -140,6 +143,14 @@ fi
 echo "Activate conda environment ${CENV}."
 eval "$(conda shell.bash hook)"
 conda activate ${CENV}
+
+#If tower token is set, then TOWER_ACCESS_TOKEN variable must be added to the environment
+if [ ${TOWER_TOKEN} != "None" ];
+then
+    export TOWER_ACCESS_TOKEN=${TOWER_TOKEN} ;
+    export NXF_VER=21.10.0 ;
+fi
+
 
 JOBNAME="SSDS_main_${ANALYSIS_NAME}_${now}"
 
