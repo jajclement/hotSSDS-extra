@@ -136,6 +136,7 @@ You can create your own json parameter file.
 
 Usage: bash run_pipeline.sh [options]
 Options :
+
     * ``-h`` display help message     
     * ``-g`` Absolute path to the genome config file (default : /home/${USER}/work/ssdspostprocess/conf/mm10.json)    
     * ``-p`` Absolute path to ssds postprocess pipeline base directory (default : /home/${USER}/work/ssdspostprocess)    
@@ -162,6 +163,7 @@ You first need to sign in to get your key, then add it to your parameters with t
 
 ### 6. Output
 Tree overview of the output folder composition :
+
 .
 ├── nxfReports   
 ├── slurm   
