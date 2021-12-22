@@ -44,7 +44,7 @@ do
 		   echo "-c Absolute path to IGH cluster configuration file (default : ${CONF})"; \
 		   echo "-a Absolute path to conda environment for nextflow (default : ${CENV})"; \
 		   echo "-o Optional arguments for the pipeline (for example \"--corMethod spearman --with_heatmap false\" ;  default : \"${OPTIONS}\")"; \
-		   echo "-w Valid Nextflow Tower token (default : ${TOWER_TOKEN} ; if not None, then the option -with-tower has to be added in -o parameter))"; \ 
+		   echo "-w Valid Nextflow Tower token (default : ${TOWER_TOKEN} ; if not None, then the option -with-tower has to be added in -o parameter)"; \
 		   echo "-t set to 1 if running pipeline on test data located in ${PIPELINE_DIRECTORY}/tests/fastq (default : ${TEST})"; \
 		   echo "-f set to 1 to force pipeline to run without checking resume/output directory (default : ${FORCE})" ; \
 		   echo "INFO : the output directory will be located in the base directory and will be named after the analysis name parameter with the .outdir suffix (default ${BASE_DIRECTORY}/${ANALYSIS_NAME}.outdir)"; \
