@@ -1,1 +1,2 @@
 - problem with export of conda env containing intervene: not possible to use it 
+- change the location of test files  (ex: /work/demassyie/results/ChIP_Dmc1_cKO_Hells_NovaSeq.outdir/finalpeaks/M_WT_poolrep.idr0.01.regionPeak.gz.finalPeaks_IDR.bed)
