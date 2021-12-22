@@ -36,6 +36,7 @@ wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
 Then execute the installation script and follow the prompts on the installer screens :
 ````sh
 bash Miniconda3-latest-Linux-x86_64.sh
+````
 
 ### 1. Get the pipeline and set up conda environment
 First you need to clone the pipeline in your working directory (in the following instructions, ``/home/${USER}/work/`` will refer to your working directory. Please substitute with the according path if different) :
