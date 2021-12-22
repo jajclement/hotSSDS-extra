@@ -35,7 +35,7 @@ TOWER_TOKEN="None"
 while getopts hp:b:n:c:a:o:t:f:g: flag
 do
 	case "${flag}" in
-		h) echo ""; echo "Usage: bash `basename $0` -i input_file [options] "; \
+		h) echo ""; echo "Usage: bash `basename $0` [options] "; \
 		   echo "Options : "; echo "-h display help message"; \
 		   echo "-g Absolute path to the genome config file (default : ${GENOME_PROFILE})" ; \
 		   echo "-p Absolute path to ssds postprocess pipeline base directory (default : ${PIPELINE_DIRECTORY})"; \
