@@ -380,13 +380,11 @@ process getForwardStrand {
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
-    publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
     publishDir "${params.fragfolder}/FRbed" , 	mode: params.publishdir_mode, pattern: "*.watson.bed"
     input:
-        tuple val(bam_id), path(bam) from fragF_ch
+        tuple val(frag_id), path(frag) from fragF_ch
     output:
-        tuple val(bam_id), path('*bigwig') into fwd_bigwig_ch
-        path('*.log')
+        tuple val(frag_id), path('*bigwig') into fwd_bigwig_ch
     when:
         params.with_FR_bigwig
     script:
@@ -415,14 +413,12 @@ process getReverseStrand {
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
-    publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
     publishDir "${params.fragfolder}/FRbed" ,   mode: params.publishdir_mode, pattern: "*.crick.bed"
 
     input:
-        tuple val(bam_id), path(bam) from fragR_ch
+        tuple val(frag_id), path(frag) from fragR_ch
     output:
-        tuple val(bam_id), path('*bigwig') into rev_bigwig_ch
-        path('*.log')
+        tuple val(frag_id), path('*bigwig') into rev_bigwig_ch
         val("ok") into FRbigwig_ok
     when:
         params.with_FR_bigwig
