@@ -3,12 +3,13 @@
 ========================================================================================
                         SSDS post-process pipeline version 1.0
                         Pauline Auffret, 2021
-                        Contact : pauline.auffret@igh.cnrs.fr
+                        Contact : Pauline.Auffret@ifremer.fr
+			Secondary contact : julie.clement@univ-perp.fr
 ========================================================================================
  SSDS post-process pipeline
  #### Homepage / Documentation
  https://gitlab.igh.cnrs.fr/pauline.auffret/ssdspostprocess
- Contact : pauline.auffret@igh.cnrs.fr
+ Contact : Pauline.Auffret@ifremer.fr
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
 Computes and Plots general statistics for processed Single-Stranded-DNA-Sequencing (SSDS) data.
@@ -53,8 +54,10 @@ Input data parameters:
 	--bamreference		DIR     ABSOLUTE PATH TO REFERENCE BAM FOLDER CONTAINING FILTERED TYPE 1 BAM FILES FOR REFERENCE (set to "None" if none provided (warning : if bamreference is not None, peakreference cannot be None) 
 	--bigwigfolder		DIR     ABSOLUTE PATH TO BIGWIG FOLDER CONTAINING BIGWIG FILES FROM SSDSNEXTFLOWPIPELINE (for example, coming from ssdsnextflowprocess, in the bigwig/kbrick_bigwig/deeptools/binsize* folder ; default : 
 	--bigwigpattern		REGEX   PATTERN FOR MATCHING BIGWIG FILES IN BIGWIGFOLDER (default : "*ssDNA_type1.deeptools.RPKM.bigwig")
-	--bedfolder		DIR     ABSOLUTE PATH TO BED FOLDER CONTAINING BED TO COMPUTE INTERSECT (default : 
+	--bedfolder		DIR     ABSOLUTE PATH TO BED FOLDER CONTAINING BED TO COMPUTE INTERSECT (default : ) 
 	--bedpattern		REGEX   PATTERN FOR MATCHING BED FILES IN BED FOLDER (default : "*.bed")
+	--fragfolder		DIR	ABSOLUTE PATH TO THE FOLDER CONTAINING BED FILE WITH FRAGMENTS AFTER ITR (default: )
+	--fragpattern		REGEX	PATTERN FOR MATCHING FRAGMENT BED FILES IN FRAGFOLDER (default: "*.bed")
 
 Genome parameters:	
         --genomebase            DIR     PATH TO REFERENCE GENOMES (default : "/poolzfs/genomes")
@@ -62,6 +65,7 @@ Genome parameters:
         --genomedir             DIR     PATH TO GENOME DIRECTORY (required if your reference genome is not present in your config file)
         --genome_fasta          FILE    PATH TO FILE GENOME FASTA FILE WITH PREEXISTING INDEX FILES FOR BWA (required if your reference genome is not present in your config file)
         --genome_gtf
+	--genome_size		FILE	PATH TO GENOME SIZE a two-column textfile containing chromosome name in the first colum and chromosome size in the second column
 
 Tools specific parameters:
         --corMethod		STRING	CORRELATION METHOD FOR DEEPTOOLS PLOTCORRELATION PROCESS (default : spearman; valid options are spearman, pearson)
@@ -360,10 +364,10 @@ process plotHeatmap {
 // Here I create a channel grouping all bam files to an identifier
 // The resulting channel is composed of 2 elements : [Id; path-to-bam]
 Channel
-    .fromPath( "${params.bamfolder}/${params.bampattern}" ) 
+    .fromPath( "${params.fragfolder}/${params.fragpattern}" ) 
     .map { tuple( it.name.split('_')[0..-3].join('_'), it ) }
     //.println() 
-    .into{ bamF_ch ; bamR_ch }  
+    .into{ fragF_ch ; fragR_ch }  
 
 // PROCESS 5    : GETFORWARDSTRAND (SAMTOOLS AND DEEPTOOLS)
 // What it does : Gets coverage originated from the forward strand from a bam file
@@ -371,40 +375,30 @@ Channel
 // Output       : forward coverage in bigwig format
 // Resources    : https://deeptools.readthedocs.io/en/develop/content/tools/bamCoverage.html?highlight=bamcoverage
 process getForwardStrand {
-    tag "${bam_id}"
+    tag "${frag_id}"
     label 'process_basic'
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
-    publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
+    publishDir "${params.fragfolder}/FRbed" , 	mode: params.publishdir_mode, pattern: "*.watson.bed"
     input:
-        tuple val(bam_id), path(bam) from bamF_ch
+        tuple val(frag_id), path(frag) from fragF_ch
     output:
-        tuple val(bam_id), path('*bigwig') into fwd_bigwig_ch
-        path('*.log')
+        tuple val(frag_id), path('*bigwig') into fwd_bigwig_ch
     when:
         params.with_FR_bigwig
     script:
     """
-    # include reads that are 2nd in a pair (128);
-    # exclude reads that are mapped to the reverse strand (16)
-    samtools view -b -f 128 -F 16 $bam > ${bam.baseName}.fwd1.bam
+    # filtering out the watson reads from fragment bedfile (+ strand)
+    grep "+" $frag > ${frag.baseName}.watson.bed
 
-    # exclude reads that are mapped to the reverse strand (16) and
-    # first in a pair (64): 64 + 16 = 80
-    samtools view -b -f 80 $bam > ${bam.baseName}.fwd2.bam
+    # preparing a bedgraph from watson-selected fragments, sorted by coordinates
+    genomeCoverageBed -i ${frag.baseName}.watson.bed -g ${params.genome_size} -bga | sort -k1,1 -k2,2n > ${frag.baseName}.watson.bedgraph
 
-    # combine the temporary files
-    samtools merge -f ${bam.baseName}.fwd.bam ${bam.baseName}.fwd1.bam ${bam.baseName}.fwd2.bam
+    # converting bedgraph to bigwig
+    bedGraphToBigWig ${frag.baseName}.watson.bedgraph ${params.genome_size} ${frag.baseName}.watson.bigwig
 
-    # index the filtered BAM file
-    samtools index ${bam.baseName}.fwd.bam
 
-    # run bamCoverage
-    bamCoverage -b ${bam.baseName}.fwd.bam -o ${bam.baseName}.fwd.bigwig >& ${params.sample_name}_${bam.baseName}_bamCoverage_fwd.log
-
-    # remove the temporary files
-    rm ${bam.baseName}.fwd*.bam*
     """
 }
 
@@ -414,41 +408,32 @@ process getForwardStrand {
 // Output       : reverse coverage in bigwig format
 // Resources    : https://deeptools.readthedocs.io/en/develop/content/tools/bamCoverage.html?highlight=bamcoverage
 process getReverseStrand {
-    tag "${bam_id}"
+    tag "${frag_id}"
     label 'process_basic'
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
-    publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
+    publishDir "${params.fragfolder}/FRbed" ,   mode: params.publishdir_mode, pattern: "*.crick.bed"
+
     input:
-        tuple val(bam_id), path(bam) from bamR_ch
+        tuple val(frag_id), path(frag) from fragR_ch
     output:
-        tuple val(bam_id), path('*bigwig') into rev_bigwig_ch
-        path('*.log')
+        tuple val(frag_id), path('*bigwig') into rev_bigwig_ch
         val("ok") into FRbigwig_ok
     when:
         params.with_FR_bigwig
     script:
     """
-    # include reads that map to the reverse strand (128)
-    # and are second in a pair (16): 128 + 16 = 144
-    samtools view -b -f 144 $bam > ${bam.baseName}.rev1.bam
+    # filtering out the watson reads from fragment bedfile (+ strand)
+    grep "-" $frag > ${frag.baseName}.crick.bed
 
-    # include reads that are first in a pair (64), but
-    # exclude those ones that map to the reverse strand (16)
-    samtools view -b -f 64 -F 16 $bam > ${bam.baseName}.rev2.bam
+    # preparing a bedgraph from watson-selected fragments, sorted by coordinates
+    genomeCoverageBed -i ${frag.baseName}.crick.bed -g ${params.genome_size} -bga | sort -k1,1 -k2,2n > ${frag.baseName}.crick.bedgraph
 
-    # merge the temporary files
-    samtools merge -f ${bam.baseName}.rev.bam ${bam.baseName}.rev1.bam ${bam.baseName}.rev2.bam
+    # converting bedgraph to bigwig
+    bedGraphToBigWig ${frag.baseName}.crick.bedgraph ${params.genome_size} ${frag.baseName}.crick.bigwig
 
-    # index the merged, filtered BAM file
-    samtools index ${bam.baseName}.rev.bam
 
-    # run bamCoverage
-    bamCoverage -b ${bam.baseName}.rev.bam -o ${bam.baseName}.rev.bigwig >& ${params.sample_name}_${bam.baseName}_bamCoverage_rev.log
-
-    # remove temporary files
-    rm ${bam.baseName}.rev*.bam*
     """
 }
 
@@ -465,16 +450,16 @@ rev_bigwig_ch
 // Output       : compressed matrix of values (.gzip  file) 
 // Resources    : https://deeptools.readthedocs.io/en/develop/content/tools/computeMatrix.html?highlight=computematrix
 process computeMatrixFR {
-    tag "${bam_id}"
+    tag "${frag_id}"
     label 'process_basic'
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/matrices", mode: params.publishdir_mode, pattern: "*.matrix.FR"
     publishDir "${params.outdir}/heatmap/log",      mode: params.publishdir_mode, pattern: "*.log"
     input:
-        tuple val(bam_id), path(rev_bw), path(fwd_bw) from FR_bigwig_ch
+        tuple val(frag_id), path(rev_bw), path(fwd_bw) from FR_bigwig_ch
     output:
-        tuple val(bam_id), path('*finalpeaks.matrix.FR') into matrix_FR_ch
+        tuple val(frag_id), path('*finalpeaks.matrix.FR') into matrix_FR_ch
         path('*.log')
     when:
         params.with_FR_heatmap && params.with_FR_bigwig
@@ -487,8 +472,8 @@ process computeMatrixFR {
                     --upstream=${params.matrix_upstream} \
                     --smartLabels \
                     --numberOfProcessors ${task.cpus} \
-                    -o ${bam_id}_b${params.matrix_upstream}_a${params.matrix_downstream}.finalpeaks.matrix.FR \
-                    >& ${bam_id}_finalpeaks.matrix.FR.log 2>&1
+                    -o ${frag_id}_b${params.matrix_upstream}_a${params.matrix_downstream}.finalpeaks.matrix.FR \
+                    >& ${frag_id}_finalpeaks.matrix.FR.log 2>&1
     """
 }
 
@@ -498,14 +483,14 @@ process computeMatrixFR {
 // Output       : heatmaps in pdf format showing forward and reverse signal around hotspots
 // Resources    : https://deeptools.readthedocs.io/en/develop/content/tools/plotHeatmap.html?highlight=plotheatmap
 process plotHeatmapFR {
-    tag "${bam_id}"
+    tag "${frag_id}"
     label 'process_basic'
     conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/plots", mode: params.publishdir_mode, pattern: "*.png"
     publishDir "${params.outdir}/heatmap/log",   mode: params.publishdir_mode, pattern: "*.log"
     input:
-        tuple val(bam_id), path(matrix) from matrix_FR_ch
+        tuple val(frag_id), path(matrix) from matrix_FR_ch
     output:
         path('*.png')
         path('*.log')
@@ -522,8 +507,8 @@ process plotHeatmapFR {
                 --heatmapWidth=${params.heatmap_width} \
                 --colorMap coolwarm \
                 --plotTitle ${bam_id} \
-                -o ${bam_id}_heatmap.FR_mqc.png \
-                >& ${bam_id}_heatmap.FR.log 2>&1
+                -o ${frag_id}_heatmap.FR_mqc.png \
+                >& ${frag_id}_heatmap.FR.log 2>&1
     """
 }                
 //***************************************************************************//
