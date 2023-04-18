@@ -1,0 +1,10 @@
+run_pipeline_ifremer.fr
+run_main.pbs
+ifremer.config
+work/
+*.outdir
+.nextflow*
+*.sif
+tests_archive/
+tests/
+test.json
