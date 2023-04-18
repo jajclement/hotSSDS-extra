@@ -1,19 +1,19 @@
 #!/usr/bin/env nextflow
 /*
 ========================================================================================
-                        SSDS post-process pipeline version 1.0
+                        hotSSDS-extra pipeline version 1.0
                         Pauline Auffret, 2021
-                        Contact : pauline.auffret@igh.cnrs.fr
+                        Contact : pauline.auffret@ifremer.fr
 ========================================================================================
  SSDS post-process pipeline
  #### Homepage / Documentation
- https://gitlab.igh.cnrs.fr/pauline.auffret/ssdspostprocess
- Contact : pauline.auffret@igh.cnrs.fr
+ https://github.com/jajclement/ssdspostprocess
+ Contact : pauline.auffret@ifremer.fr
 ----------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------
 Computes and Plots general statistics for processed Single-Stranded-DNA-Sequencing (SSDS) data.
-The input data must come from ssdsnextflowpipeline version 2.0 
-(see https://gitlab.igh.cnrs.fr/pauline.auffret/ssdsnextflowpipeline) 
+The input data must come from hotSSDS pipeline version 2.0 
+(see https://github.com/jajclement/ssdsnextflowpipeline) 
 
 Pipeline overview:
 // PROCESS 1    : MULTIBAMSUMMARY (DEEPTOOLS)
@@ -43,7 +43,7 @@ def helpMessage() {
    Tested with Nextflow v20.07.1
 =============================================================================
 Input data parameters:
-	-params_file            FILE    PATH TO PARAMETERS JSON FILE (template and default : /work/${USER}/ssdsnextflowpipeline/conf/mm10.json)
+	-params-file            FILE    PATH TO PARAMETERS JSON FILE (template and default : ${baseDir}/conf/mm10.json)
 	--name			STRING  ANALYSIS NAME (default : "SSDS_postprocess_pipeline")
         --sample_name           STRING  SAMPLE OR GROUP NAME (default : "DMC1-ChIP")       
 	--finalpeaksbed		FILE	FILTERED PEAKS IN BED FORMAT (for example, coming from ssdsnextflowprocess, in the finalpeaks folder (warning : if finalpeakbed is not None, bamreference cannot be None) ; default : )
@@ -57,7 +57,7 @@ Input data parameters:
 	--bedpattern		REGEX   PATTERN FOR MATCHING BED FILES IN BED FOLDER (default : "*.bed")
 
 Genome parameters:	
-        --genomebase            DIR     PATH TO REFERENCE GENOMES (default : "/poolzfs/genomes")
+        --genomebase            DIR     PATH TO REFERENCE GENOMES DIRECTORY
         --genome                STRING  REFERENCE GENOME NAME (must correspond to an existing genome in your config file, default : "mm10")
         --genomedir             DIR     PATH TO GENOME DIRECTORY (required if your reference genome is not present in your config file)
         --genome_fasta          FILE    PATH TO FILE GENOME FASTA FILE WITH PREEXISTING INDEX FILES FOR BWA (required if your reference genome is not present in your config file)
@@ -115,14 +115,64 @@ def runName = "${params.name}.$workflow.runName"
 def plot_homer_annotation_script = "${params.src}/plot_homer_annotatepeaks.r"  //Adapted from nf-core chipseq pipeline version 1.2.1
 
 // Check if input files/directories exist
-if (params.finalpeaksbed) { println("Checking finalpeaksbed input file...") ; f_finalpeaks = file(params.finalpeaksbed, checkIfExists: true) } ; println("Ok")
-if (params.peakreference != "None") { println("Checking peakreference input file...") ; f_peaksref = file(params.peakreference, checkIfExists: true) } ; println("Ok")
-if (params.bamfolder) { println("Checking bamfolder directory...") ; d_bam = file(params.bamfolder, checkIfExists: true) } ; println("Ok")
-if (params.bigwigfolder) { println("Checking bigwigfolder  directory...") ; d_bw = file(params.bigwigfolder, checkIfExists: true) } ; println("Ok")
-if (params.bedfolder) { println("Checking bedfolder  directory...") ; d_bw = file(params.bedfolder, checkIfExists: true) } ; println("Ok")
-if (params.bamreference != "None") { println("Checking bamreference directory...") ; d_bamref = file(params.bamreference, checkIfExists: true) } ; println("Ok")
-if (params.bamreference != "None" && params.peakreference == "None" ) { println("Checking conformity of reference parameters peakreference and bamreference") ; println("Error : bamreference parameter is set but there is no peakreference parameter ; either set bamreference to None or set up a peakreference file") ; exit 1 } ; else println("Ok")
-if (params.bamreference == "None" && params.peakreference != "None" ) { println("Checking conformity of reference parameters peakreference and bamreference") ; println("Error : peakreference parameter is set but there is no bamreference parameter ; either set peakreference to None or set up a bamreference folder") ; exit 1 } ; else println("Ok")
+File emptyfile1  = new File("${params.outdir}/qc/empty1.txt")
+File emptyfile2  = new File("${params.outdir}/qc/empty2.txt")
+File emptyfile3  = new File("${params.outdir}/qc/empty3.txt")
+File emptyfile4  = new File("${params.outdir}/qc/empty4.txt")
+File emptyfile5  = new File("${params.outdir}/qc/empty5.txt")
+File emptyfile6  = new File("${params.outdir}/qc/empty6.txt")
+File emptyfile7  = new File("${params.outdir}/qc/empty7.txt")
+File emptyfile8  = new File("${params.outdir}/qc/empty8.txt")
+
+if (params.finalpeaksbed) { println("Checking finalpeaksbed input file...") ; finalpeaks_ch = file(params.finalpeaksbed, checkIfExists: true) } ; else { finalpeaks_ch = Channel.fromPath(emptyfile1) } ; println("Ok")
+
+if (params.peakreference != "None") { println("Checking peakreference input file...") ; peaksref_ch = file(params.peakreference, checkIfExists: true) } ; else { peaksref_ch = Channel.fromPath(emptyfile2) } ; println("Ok")
+
+if (params.bamfolder) { 
+    println("Checking bamfolder directory...")
+    Channel
+        .fromPath("${params.bamfolder}/${params.bampattern}", checkIfExists: true)
+        .set { bam_ch }
+} ; else { bam_ch = Channel.fromPath(emptyfile3) } ; println("Ok")
+
+if (params.baifolder) { 
+    println("Checking baifolder directory...")
+    Channel
+        .fromPath("${params.baifolder}/${params.baipattern}", checkIfExists: true)
+        .set { bai_ch }
+ } ; else { bai_ch = Channel.fromPath(emptyfile4) } ; println("Ok")
+
+if (params.bigwigfolder) {
+    println("Checking bigwigfolder directory...")
+    Channel
+        .fromPath("${params.bigwigfolder}/${params.bigwigpattern}", checkIfExists: true) 
+        .set { bw_ch } 
+} ; else { bw_ch = Channel.fromPath(emptyfile5) } ; println("Ok")
+
+if (params.bedfolder) {
+    println("Checking bedfolder directory...") 
+    Channel
+        .fromPath("${params.bedfolder}", checkIfExists: true)
+        .set { d_bw }
+} ; else { d_bw = Channel.fromPath(emptyfile6) } ; println("Ok")
+
+if (params.bamreference != "None") { 
+    println("Checking bamreference directory...")
+    Channel
+        .fromPath("${params.bamreference}/${params.bampattern}", checkIfExists: true)
+        .set { bamref_ch } 
+} ; else { bamref_ch = Channel.fromPath(emptyfile7) } ; println("Ok")
+
+if (params.baireference != "None") {
+    println("Checking baireference directory...")
+    Channel
+        .fromPath("${params.baireference}/${params.baipattern}", checkIfExists: true)
+        .set { bairef_ch } 
+} ; else { bairef_ch = Channel.fromPath(emptyfile8) } ; println("Ok")
+
+println("Checking conformity of reference parameters peakreference and bamreference...")
+if (params.bamreference != "None" && params.peakreference == "None" ) { println("Error : bamreference parameter is set but there is no peakreference parameter ; either set bamreference to None or set up a peakreference file") ; exit 1 } 
+if (params.bamreference == "None" && params.peakreference != "None" ) { println("Error : peakreference parameter is set but there is no bamreference parameter ; either set peakreference to None or set up a bamreference folder") ; exit 1 } ; else println("Ok")
 
 // Check if genome exists in the config file
 if (params.genomes && params.genome && !params.genomes.containsKey(params.genome)) {
@@ -203,11 +253,17 @@ paramsSection()
 // Resources    : https://deeptools.readthedocs.io/en/develop/content/tools/multiBamSummary.html
 process multiBamSummary {
     tag "${params.sample_name}"
-    label 'process_basic'
-    //conda 'deeptools=3.5.1'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
-    publishDir "${params.outdir}/clustering/matrices",   mode: params.publishdir_mode, pattern: "*.npz*"
-    publishDir "${params.outdir}/clustering/log",        mode: params.publishdir_mode, pattern: "*.log*"
+    label 'process_medium'
+    label 'deeptools'
+    publishDir "${params.outdir}/clustering/matrices",			mode: params.publishdir_mode, pattern: "*.npz*"
+    publishDir "${baseDir}/${params.name}.outdir/01_logs/clustering",	mode: params.publishdir_mode, pattern: "*.log*"
+    input:
+        path(finalpeaksbed) from finalpeaks_ch
+        path(peakreference) from peaksref_ch
+        path(bam) from bam_ch.collect()
+        path(bamreference) from bamref_ch.collect()
+        path(bai) from bai_ch.collect()
+        path(baireference) from bairef_ch.collect()
     output:
         tuple path('*finalpeaks.npz'), path('*peakref.npz') into bamSummary_ch 
         path('*.log')
@@ -215,8 +271,8 @@ process multiBamSummary {
         params.with_clustering
     script:
     """
-    multiBamSummary BED-file --BED ${params.finalpeaksbed} \
-                    --bamfiles ${params.bamfolder}/*.bam \
+    multiBamSummary BED-file --BED ${finalpeaksbed} \
+                    --bamfiles ${bam} \
                     --outRawCounts ${params.sample_name}_rawCounts.txt \
                     --scalingFactors ${params.sample_name}_scalingFactors.txt \
                     --smartLabels \
@@ -225,8 +281,8 @@ process multiBamSummary {
     # If another bed file is given to compare with hotspots 
     if [ ${params.peakreference} != "None" ]
     then
-        multiBamSummary BED-file --BED ${params.peakreference} \
-                        --bamfiles ${params.bamfolder}/*.bam ${params.bamreference}/*.bam \
+        multiBamSummary BED-file --BED ${peakreference} \
+                        --bamfiles ${bam} ${bamreference} \
                         --outRawCounts ${params.sample_name}_rawCounts.txt \
                         --scalingFactors ${params.sample_name}_scalingFactors.txt \
                         --smartLabels \
@@ -247,10 +303,9 @@ process multiBamSummary {
 process plotCorrelation {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
-    //conda 'deeptools=3.5.1'
-    publishDir "${params.outdir}/clustering/plots", mode: params.publishdir_mode, pattern: "*.png*"
-    publishDir "${params.outdir}/clustering/log",   mode: params.publishdir_mode, pattern: "*.log*"
+    label 'deeptools'
+    publishDir "${params.outdir}/clustering/plots",			mode: params.publishdir_mode, pattern: "*.png*"
+    publishDir "${baseDir}/${params.name}.outdir/01_logs/clustering",	mode: params.publishdir_mode, pattern: "*.log*"
     input:
         tuple path(finalpeaks_matrix), path(peakref_matrix) from bamSummary_ch
     output:
@@ -299,10 +354,13 @@ process plotCorrelation {
 process computeMatrix {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
-    //conda 'deeptools=3.5.1'
-    publishDir "${params.outdir}/heatmap/matrices", mode: params.publishdir_mode, pattern: "*.matrix"
-    publishDir "${params.outdir}/heatmap/log",      mode: params.publishdir_mode, pattern: "*.log"
+    label 'internet_access'
+    label 'deeptools'
+    publishDir "${params.outdir}/heatmap/matrices",			mode: params.publishdir_mode, pattern: "*.matrix"
+    publishDir "${baseDir}/${params.name}.outdir/01_logs/heatmap",	mode: params.publishdir_mode, pattern: "*.log"
+    input:
+        path(finalpeaksbed) from finalpeaks_ch
+        path(bigwig) from bw_ch.collect()
     output:
         path('*finalpeaks.matrix') into matrix_ch
         path('*.log')
@@ -310,8 +368,8 @@ process computeMatrix {
         params.with_heatmap
     script:
     """
-    computeMatrix   reference-point --regionsFileName ${params.finalpeaksbed} \
-                    --scoreFileName ${params.bigwigfolder}/${params.bigwigpattern} \
+    computeMatrix   reference-point --regionsFileName ${finalpeaksbed} \
+                    --scoreFileName ${bigwig} \
                     --referencePoint=center \
                     --downstream=${params.matrix_downstream} \
                     --upstream=${params.matrix_upstream} \
@@ -330,7 +388,8 @@ process computeMatrix {
 process plotHeatmap {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    label 'deeptools'
+    //conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/plots", mode: params.publishdir_mode, pattern: "*.png"
     publishDir "${params.outdir}/heatmap/log",   mode: params.publishdir_mode, pattern: "*.log"
@@ -373,7 +432,8 @@ Channel
 process getForwardStrand {
     tag "${bam_id}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    label 'deeptools'
+    //conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
     publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
@@ -416,7 +476,8 @@ process getForwardStrand {
 process getReverseStrand {
     tag "${bam_id}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    label 'deeptools'
+    //conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1 bioconda::samtools=1.14'
     publishDir "${params.outdir}/FRbigwig",     mode: params.publishdir_mode, pattern: "*.bigwig"
     publishDir "${params.outdir}/FRbigwig/log", mode: params.publishdir_mode, pattern: "*.log"
@@ -467,11 +528,13 @@ rev_bigwig_ch
 process computeMatrixFR {
     tag "${bam_id}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    label 'deeptools'
+    //conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/matrices", mode: params.publishdir_mode, pattern: "*.matrix.FR"
     publishDir "${params.outdir}/heatmap/log",      mode: params.publishdir_mode, pattern: "*.log"
     input:
+        path(finalpeaksbed) from finalpeaks_ch
         tuple val(bam_id), path(rev_bw), path(fwd_bw) from FR_bigwig_ch
     output:
         tuple val(bam_id), path('*finalpeaks.matrix.FR') into matrix_FR_ch
@@ -480,7 +543,7 @@ process computeMatrixFR {
         params.with_FR_heatmap && params.with_FR_bigwig
     script:
     """
-    computeMatrix   reference-point --regionsFileName ${params.finalpeaksbed} \
+    computeMatrix   reference-point --regionsFileName ${finalpeaksbed} \
                     --scoreFileName ${fwd_bw} ${rev_bw} \
                     --referencePoint=center \
                     --downstream=${params.matrix_downstream} \
@@ -500,7 +563,8 @@ process computeMatrixFR {
 process plotHeatmapFR {
     tag "${bam_id}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_deeptools.yml"
+    label 'deeptools'
+    //conda "${baseDir}/conda_yml/environment_deeptools.yml"
     //conda 'deeptools=3.5.1'
     publishDir "${params.outdir}/heatmap/plots", mode: params.publishdir_mode, pattern: "*.png"
     publishDir "${params.outdir}/heatmap/log",   mode: params.publishdir_mode, pattern: "*.log"
@@ -538,10 +602,13 @@ process plotHeatmapFR {
 process annotatePeaks {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda 'bioconda::homer=4.11 r::r=3.6.0 conda-forge::r-optparse=1.6.4 conda-forge::r-ggplot2=3.3.0 conda-forge::r-reshape2=1.4.3'
+    label 'annotatePeaks'
+    //conda 'bioconda::homer=4.11 r::r=3.6.0 conda-forge::r-optparse=1.6.4 conda-forge::r-ggplot2=3.3.0 conda-forge::r-reshape2=1.4.3'
     publishDir "${params.outdir}/annotations/plots", mode: params.publishdir_mode, pattern: "*.pdf"
     publishDir "${params.outdir}/annotations",       mode: params.publishdir_mode, pattern: "*.txt"
     publishDir "${params.outdir}/annotations/log",   mode: params.publishdir_mode, pattern: "*.log"
+    input:
+        path(finalpeaksbed) from finalpeaks_ch
     output:
         path('*.txt')
         path('*.pdf')
@@ -557,12 +624,12 @@ process annotatePeaks {
     then
         #download UCSC mm10 annotation files for Homer
         perl \$CONDA_PREFIX/share/homer/.//configureHomer.pl -install mm10
-        annotatePeaks.pl ${params.finalpeaksbed} \
+        annotatePeaks.pl "${finalpeaksbed}" \
                      mm10 \
                      1> ${params.sample_name}_annotatePeaks_homer_${params.genome}.txt \
                      2> ${params.sample_name}_annotatePeaks_homer_${params.genome}.log
     else
-        annotatePeaks.pl ${params.finalpeaksbed} \
+        annotatePeaks.pl "${finalpeaksbed}" \
                      ${params.genome_fasta} \
                      ${params.gtf_id} \
                      -gtf ${params.genome_gtf} \
@@ -588,8 +655,9 @@ process annotatePeaks {
 process plotIntersect {
     tag "${params.sample_name}"
     label 'process_basic'
+    label 'plotIntersect'
     //conda 'bioconda::intervene=0.6.4'
-    conda "${params.conda_intervene}"
+    //conda "${params.conda_intervene}"
     publishDir "${params.outdir}/intersect/plots",   mode: params.publishdir_mode, pattern: "*"
     //publishDir "${params.outdir}/intersect/overlap", mode: params.publishdir_mode, pattern: "*.bed"
     publishDir "${params.outdir}/intersect/log",     mode: params.publishdir_mode, pattern: "*.log"
@@ -612,7 +680,7 @@ process plotIntersect {
     #There is a bug (need to investigate but no time now) : need to edit the R script generated by intervene before execution otherwise the execution is halted
     sed -i "s/, mainbar.y.label =\\"No. of Intersections\\", sets.x.label =\\"Set size\\")/)/g" ./${params.sample_name}_mqc/${params.sample_name}_mqc_upset.R >& ${params.sample_name}_intervene_sed.log 2>&1
 
-    #Finally, esecute Rscript to plot the upset plot
+    #Finally, execute Rscript to plot the upset plot
     Rscript ./${params.sample_name}_mqc/${params.sample_name}_mqc_upset.R >& ${params.sample_name}_intervene_rscript.log 2>&1
     """
 }
@@ -630,7 +698,8 @@ if (!params.with_plot_intersect) { intersect_ok = Channel.value( 'ok' ) }
 process generalReport {
     tag "${params.sample_name}"
     label 'process_basic'
-    conda "${baseDir}/conda_yml/environment_multiqc.yml"
+    label 'generalReport'
+    //conda "${baseDir}/conda_yml/environment_multiqc.yml"
     publishDir "${params.outdir}/multiqc",   mode: params.publishdir_mode 
     input:
         val('clustering_ok') from clustering_ok.collect().ifEmpty([]) 
